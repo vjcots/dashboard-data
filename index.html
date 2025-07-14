@@ -16,36 +16,27 @@
     body {
       margin: 0;
       font-family: 'Inter', sans-serif;
-      background-color: var(--color-bg);
+      background: var(--color-bg);
       color: var(--color-text);
       padding: 2rem;
     }
 
-    h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      margin-bottom: 2rem;
-    }
+    h1 { font-size: 2rem; font-weight: 700; margin-bottom: 2rem; }
 
-    .user-list {
-      display: grid;
-      gap: 1rem;
-    }
+    .user-list { display: grid; gap: 1rem; }
 
     .user-card {
-      background-color: var(--color-card);
-      padding: 1rem 1.5rem;
+      background: var(--color-card);
       border: 1px solid var(--color-border);
       border-radius: 12px;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      padding: 1rem 1.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,.05);
+      transition: transform .15s ease, border-color .15s ease;
     }
-
     .user-card:hover {
-      border-color: var(--color-blue);
       transform: translateY(-2px);
+      border-color: var(--color-blue);
     }
-
     .user-link {
       color: var(--color-blue);
       text-decoration: none;
@@ -55,62 +46,58 @@
   </style>
   <script src="utils.js"></script>
 </head>
+
 <body>
   <h1>Usuarios en asistencia</h1>
-  <div class="user-list" id="lista"></div>
+  <div id="lista" class="user-list"></div>
 
   <script>
-    const usuariosRenderizados = new Map();
+    let lastSnapshot = '';   // JSON string de la lista anterior
 
     async function cargarUsuarios() {
+      // 1️⃣ Traer todas las claves
       const keys = await redisKeys('user:*:meta');
-      const nuevosKeys = new Set(keys);
 
-      // Eliminar usuarios que ya no están
-      for (const telefono of usuariosRenderizados.keys()) {
-        const clave = `user:${telefono}:meta`;
-        if (!nuevosKeys.has(clave)) {
-          const el = document.getElementById(`user-${telefono}`);
-          if (el) el.remove();
-          usuariosRenderizados.delete(telefono);
-        }
-      }
+      // 2️⃣ Obtener datos de cada hash en paralelo
+      const users = await Promise.all(
+        keys.map(async key => {
+          const datos = await redisHGetAll(key);
+          const telefonoRaw = datos.telefono || key.split(':')[1];
+          return {
+            telefono: telefonoRaw.replace('+34', ''),
+            nombre:   datos.profileName || datos.nombre || 'Sin nombre',
+            imei:     datos.imei || 'Sin IMEI'
+          };
+        })
+      );
 
-      // Añadir o actualizar usuarios
-      for (const key of keys) {
-        const datos = await redisHGetAll(key);
-        const telefonoRaw = datos.telefono || key.split(':')[1];
-        const telefono = telefonoRaw.replace('+34', '');
-        const nombre = datos.profileName || datos.nombre || 'Sin nombre';
-        const imei = datos.imei || 'Sin IMEI';
-        const texto = `${telefono} - ${nombre} - ${imei}`;
+      // 3️⃣ Ordenar por teléfono para snapshot estable
+      users.sort((a, b) => a.telefono.localeCompare(b.telefono));
 
-        let existente = usuariosRenderizados.get(telefono);
-        if (existente && existente.text === texto) continue;
+      // 4️⃣ Crear snapshot y comparar
+      const snapshot = JSON.stringify(users);
+      if (snapshot === lastSnapshot) return;        // ⏩ Sin cambios → no tocamos el DOM
+      lastSnapshot = snapshot;
 
-        const contenedor = document.getElementById('lista');
+      // 5️⃣ Redibujar solo si hay cambios
+      const cont = document.getElementById('lista');
+      cont.innerHTML = '';                          // limpiar antes de repoblar
 
-        let card = document.getElementById(`user-${telefono}`);
-        if (!card) {
-          card = document.createElement('div');
-          card.id = `user-${telefono}`;
-          card.className = 'user-card';
+      users.forEach(u => {
+        const card = document.createElement('div');
+        card.className = 'user-card';
 
-          const link = document.createElement('a');
-          link.href = `usuario.html?telefono=${telefono}`;
-          link.className = 'user-link';
-          link.textContent = texto;
+        const link = document.createElement('a');
+        link.href = `usuario.html?telefono=${u.telefono}`;
+        link.className = 'user-link';
+        link.textContent = `${u.telefono} - ${u.nombre} - ${u.imei}`;
 
-          card.appendChild(link);
-          contenedor.appendChild(card);
-        } else {
-          card.querySelector('a').textContent = texto;
-        }
-
-        usuariosRenderizados.set(telefono, { text: texto });
-      }
+        card.appendChild(link);
+        cont.appendChild(card);
+      });
     }
 
+    // Primera carga + refresco cada 5 s
     cargarUsuarios();
     setInterval(cargarUsuarios, 5000);
   </script>
