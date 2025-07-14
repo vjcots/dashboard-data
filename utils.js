@@ -1,20 +1,29 @@
-const UPSTASH_URL = 'https://boss-trout-41956.upstash.io';
-const UPSTASH_TOKEN = 'AqPkAAIgcDGO-OZuVmKboPXAp3KEJNqepgwD9ThmrK88RpsgT_hwzQ';  // Sustituye por tu token real de lectura
+const UPSTASH_URL   = 'https://boss-trout-41956.upstash.io';
+const UPSTASH_TOKEN = 'Bearer TU_TOKEN_AQUI';   // ← pon tu token real
 
-// Obtener todos los campos de un hash (por ejemplo: user:34649128871:meta)
+// ------------------ HGETALL que siempre devuelve objeto ------------------
 async function redisHGetAll(key) {
-  const res = await fetch(`${UPSTASH_URL}/hgetall/${key}`, {
-    headers: { Authorization: UPSTASH_TOKEN },
-  });
+  // 1⃣  Intentamos con el parámetro _format=json (Upstash lo soporta)
+  const url = `${UPSTASH_URL}/hgetall/${encodeURIComponent(key)}?_format=json`;
+  const res = await fetch(url, { headers: { Authorization: UPSTASH_TOKEN } });
   const json = await res.json();
-  return json.result || {};
+
+  // 2⃣  Si Upstash devuelve objeto ✅ lo usamos tal cual
+  if (json.result && !Array.isArray(json.result)) return json.result || {};
+
+  // 3⃣  Si devuelve array ➜ lo convertimos (compatibilidad)
+  const arr = json.result || [];
+  const obj = {};
+  for (let i = 0; i < arr.length; i += 2) obj[arr[i]] = arr[i + 1];
+  return obj;
 }
 
-// Listar claves que coincidan con un patrón (reemplazo de KEYS)
+// ------------------ SCAN para listar claves ------------------
 async function redisKeys(pattern) {
-  const res = await fetch(`${UPSTASH_URL}/scan/0?match=${encodeURIComponent(pattern)}`, {
-    headers: { Authorization: UPSTASH_TOKEN },
-  });
+  const res = await fetch(
+    `${UPSTASH_URL}/scan/0?match=${encodeURIComponent(pattern)}`,
+    { headers: { Authorization: UPSTASH_TOKEN } }
+  );
   const json = await res.json();
-  return json.result?.[1] || [];  // result = [cursor, [array de claves]]
+  return json.result?.[1] || [];
 }
