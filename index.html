@@ -5,101 +5,91 @@
   <title>Usuarios en asistencia</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --color-bg: #f5f5fa;
-      --color-text: #0f0f0f;
-      --color-blue: #0045e6;
-      --color-card: #ffffff;
-      --color-border: #e2e2e9;
+    :root{
+      --bg:#f5f5fa; --text:#0f0f0f; --blue:#0045e6;
+      --card:#fff;  --border:#e2e2e9;
     }
-
-    body {
-      margin: 0;
-      font-family: 'Inter', sans-serif;
-      background: var(--color-bg);
-      color: var(--color-text);
-      padding: 2rem;
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);padding:2rem;}
+    h1{font-size:2rem;font-weight:700;margin-bottom:2rem;}
+    .user-list{display:grid;gap:1rem;}
+    .user-card{
+      background:var(--card);border:1px solid var(--border);border-radius:12px;
+      padding:1rem 1.5rem;box-shadow:0 4px 6px rgba(0,0,0,.05);
+      transition:transform .15s ease,border-color .15s ease;
     }
-
-    h1 { font-size: 2rem; font-weight: 700; margin-bottom: 2rem; }
-
-    .user-list { display: grid; gap: 1rem; }
-
-    .user-card {
-      background: var(--color-card);
-      border: 1px solid var(--color-border);
-      border-radius: 12px;
-      padding: 1rem 1.5rem;
-      box-shadow: 0 4px 6px rgba(0,0,0,.05);
-      transition: transform .15s ease, border-color .15s ease;
-    }
-    .user-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--color-blue);
-    }
-    .user-link {
-      color: var(--color-blue);
-      text-decoration: none;
-      font-size: 1.05rem;
-      font-weight: 500;
-    }
+    .user-card:hover{transform:translateY(-2px);border-color:var(--blue);}
+    .user-link{color:var(--blue);text-decoration:none;font-size:1.05rem;font-weight:500;}
   </style>
   <script src="utils.js"></script>
 </head>
-
 <body>
-  <h1>Usuarios en asistencia</h1>
-  <div id="lista" class="user-list"></div>
 
-  <script>
-    let lastSnapshot = '';   // JSON string de la lista anterior
+<h1>Usuarios en asistencia</h1>
+<div id="lista" class="user-list"></div>
 
-    async function cargarUsuarios() {
-      // 1️⃣ Traer todas las claves
-      const keys = await redisKeys('user:*:meta');
+<script>
+  // ------------- estado de lo que ya está pintado -------------
+  const rendered = new Map(); // telefono -> texto mostrado
 
-      // 2️⃣ Obtener datos de cada hash en paralelo
-      const users = await Promise.all(
-        keys.map(async key => {
-          const datos = await redisHGetAll(key);
-          const telefonoRaw = datos.telefono || key.split(':')[1];
-          return {
-            telefono: telefonoRaw.replace('+34', ''),
-            nombre:   datos.profileName || datos.nombre || 'Sin nombre',
-            imei:     datos.imei || 'Sin IMEI'
-          };
-        })
-      );
+  // ------------- crea tarjeta -------------
+  function crearTarjeta(tel, texto){
+    const card = document.createElement('div');
+    card.id = `u-${tel}`;
+    card.className = 'user-card';
+    const link = document.createElement('a');
+    link.href = `usuario.html?telefono=${tel}`;
+    link.className = 'user-link';
+    link.textContent = texto;
+    card.appendChild(link);
+    return card;
+  }
 
-      // 3️⃣ Ordenar por teléfono para snapshot estable
-      users.sort((a, b) => a.telefono.localeCompare(b.telefono));
+  // ------------- bucle de refresco -------------
+  async function refrescar(){
+    // 1. obtener claves y datos
+    const keys = await redisKeys('user:*:meta');
+    const nuevos = new Map();
 
-      // 4️⃣ Crear snapshot y comparar
-      const snapshot = JSON.stringify(users);
-      if (snapshot === lastSnapshot) return;        // ⏩ Sin cambios → no tocamos el DOM
-      lastSnapshot = snapshot;
+    await Promise.all(keys.map(async k=>{
+      const d = await redisHGetAll(k);
+      const telRaw = d.telefono || k.split(':')[1];
+      const tel    = telRaw.replace('+34','');
+      const nombre = d.profileName || d.nombre || 'Sin nombre';
+      const imei   = d.imei || 'Sin IMEI';
+      const texto  = `${tel} - ${nombre} - ${imei}`;
+      nuevos.set(tel, texto);
+    }));
 
-      // 5️⃣ Redibujar solo si hay cambios
-      const cont = document.getElementById('lista');
-      cont.innerHTML = '';                          // limpiar antes de repoblar
+    const lista = document.getElementById('lista');
 
-      users.forEach(u => {
-        const card = document.createElement('div');
-        card.className = 'user-card';
+    // 2. añadir o actualizar
+    nuevos.forEach((texto,tel)=>{
+      if(!rendered.has(tel)){
+        // nuevo -> añadir
+        lista.appendChild(crearTarjeta(tel, texto));
+      }else if(rendered.get(tel)!==texto){
+        // cambiado -> actualizar texto
+        document.querySelector(`#u-${tel} .user-link`).textContent = texto;
+      }
+    });
 
-        const link = document.createElement('a');
-        link.href = `usuario.html?telefono=${u.telefono}`;
-        link.className = 'user-link';
-        link.textContent = `${u.telefono} - ${u.nombre} - ${u.imei}`;
+    // 3. eliminar los que ya no existen
+    rendered.forEach((_,tel)=>{
+      if(!nuevos.has(tel)){
+        const el = document.getElementById(`u-${tel}`);
+        if(el) el.remove();
+      }
+    });
 
-        card.appendChild(link);
-        cont.appendChild(card);
-      });
-    }
+    // 4. guardar snapshot actual
+    rendered.clear();
+    nuevos.forEach((txt,tel)=>rendered.set(tel,txt));
+  }
 
-    // Primera carga + refresco cada 5 s
-    cargarUsuarios();
-    setInterval(cargarUsuarios, 5000);
-  </script>
+  // primera carga + polling
+  refrescar();
+  setInterval(refrescar, 5000);
+</script>
 </body>
 </html>
