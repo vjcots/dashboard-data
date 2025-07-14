@@ -3,93 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <title>Usuarios en asistencia</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    :root{
-      --bg:#f5f5fa; --text:#0f0f0f; --blue:#0045e6;
-      --card:#fff;  --border:#e2e2e9;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);padding:2rem;}
-    h1{font-size:2rem;font-weight:700;margin-bottom:2rem;}
-    .user-list{display:grid;gap:1rem;}
-    .user-card{
-      background:var(--card);border:1px solid var(--border);border-radius:12px;
-      padding:1rem 1.5rem;box-shadow:0 4px 6px rgba(0,0,0,.05);
-      transition:transform .15s ease,border-color .15s ease;
-    }
-    .user-card:hover{transform:translateY(-2px);border-color:var(--blue);}
-    .user-link{color:var(--blue);text-decoration:none;font-size:1.05rem;font-weight:500;}
+    :root{--bg:#f5f5fa;--txt:#0f0f0f;--blue:#0045e6;--card:#fff;--border:#e2e2e9}
+    body{margin:0;font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);padding:2rem;}
+    h1{font-size:1.9rem;font-weight:600;margin-bottom:1.8rem;}
+    .list{display:grid;gap:1rem;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.4rem;
+          box-shadow:0 3px 5px rgba(0,0,0,.05);transition:.15s;}
+    .card:hover{border-color:var(--blue);transform:translateY(-2px);}
+    .link{color:var(--blue);text-decoration:none;font-weight:500;font-size:1.05rem;}
   </style>
   <script src="utils.js"></script>
 </head>
 <body>
-
-<h1>Usuarios en asistencia</h1>
-<div id="lista" class="user-list"></div>
+  <h1>Usuarios en asistencia</h1>
+  <div id="list" class="list"></div>
 
 <script>
-  // ------------- estado de lo que ya está pintado -------------
-  const rendered = new Map(); // telefono -> texto mostrado
+  /* ------------------------------------------------------------------ */
+  const rendered = new Map();   // tel -> texto mostrado (para diff)
 
-  // ------------- crea tarjeta -------------
-  function crearTarjeta(tel, texto){
+  function makeCard(tel, text){
     const card = document.createElement('div');
     card.id = `u-${tel}`;
-    card.className = 'user-card';
-    const link = document.createElement('a');
-    link.href = `usuario.html?telefono=${tel}`;
-    link.className = 'user-link';
-    link.textContent = texto;
-    card.appendChild(link);
+    card.className = 'card';
+    const a = document.createElement('a');
+    a.href  = `usuario.html?telefono=${tel}`;
+    a.className = 'link';
+    a.textContent = text;
+    card.appendChild(a);
     return card;
   }
 
-  // ------------- bucle de refresco -------------
-  async function refrescar(){
-    // 1. obtener claves y datos
+  async function refresh(){
     const keys = await redisKeys('user:*:meta');
-    const nuevos = new Map();
+    const list = document.getElementById('list');
+    const currentTels = new Set();
 
-    await Promise.all(keys.map(async k=>{
-      const d = await redisHGetAll(k);
-      const telRaw = d.telefono || k.split(':')[1];
-      const tel    = telRaw.replace('+34','');
-      const nombre = d.profileName || d.nombre || 'Sin nombre';
-      const imei   = d.imei || 'Sin IMEI';
-      const texto  = `${tel} - ${nombre} - ${imei}`;
-      nuevos.set(tel, texto);
-    }));
+    for (const k of keys){
+      const datos = await redisHGetAll(k);
 
-    const lista = document.getElementById('lista');
+      const telRaw = datos.telefono || k.split(':')[1];          // +34…
+      const tel    = telRaw.replace('+34','');                   // quitamos +34 para URL/Text
+      currentTels.add(tel);
 
-    // 2. añadir o actualizar
-    nuevos.forEach((texto,tel)=>{
-      if(!rendered.has(tel)){
-        // nuevo -> añadir
-        lista.appendChild(crearTarjeta(tel, texto));
-      }else if(rendered.get(tel)!==texto){
-        // cambiado -> actualizar texto
-        document.querySelector(`#u-${tel} .user-link`).textContent = texto;
+      const nombre = datos.profileName || datos.nombre || 'Sin nombre';
+      const imei   = datos.imei || 'Sin IMEI';
+      const text   = `${tel} - ${nombre} - ${imei}`;
+
+      // A) nuevo
+      if (!rendered.has(tel)){
+        list.appendChild( makeCard(tel, text) );
+        rendered.set(tel, text);
+        continue;
       }
-    });
 
-    // 3. eliminar los que ya no existen
-    rendered.forEach((_,tel)=>{
-      if(!nuevos.has(tel)){
+      // B) existente pero cambiado
+      if (rendered.get(tel) !== text){
+        document.querySelector(`#u-${tel} .link`).textContent = text;
+        rendered.set(tel, text);
+      }
+    }
+
+    // C) eliminar los que ya no existen
+    for (const tel of rendered.keys()){
+      if (!currentTels.has(tel)){
         const el = document.getElementById(`u-${tel}`);
-        if(el) el.remove();
+        if (el) el.remove();
+        rendered.delete(tel);
       }
-    });
-
-    // 4. guardar snapshot actual
-    rendered.clear();
-    nuevos.forEach((txt,tel)=>rendered.set(tel,txt));
+    }
   }
 
-  // primera carga + polling
-  refrescar();
-  setInterval(refrescar, 5000);
+  refresh();               // primera carga
+  setInterval(refresh,5000); // polling sin parpadeo
 </script>
 </body>
 </html>
