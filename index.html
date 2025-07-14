@@ -49,8 +49,8 @@
     .user-link {
       color: var(--color-blue);
       text-decoration: none;
-      font-size: 1.1rem;
-      font-weight: 600;
+      font-size: 1.05rem;
+      font-weight: 500;
     }
   </style>
   <script src="utils.js"></script>
@@ -65,19 +65,23 @@
       const lista = document.getElementById('lista');
       lista.innerHTML = '';
 
-      keys.forEach(key => {
+      for (const key of keys) {
         const telefono = key.split(':')[1];
+        const datos = await redisHGetAll(key);
+        const nombre = datos.profileName || datos.nombre || 'Sin nombre';
+        const imei = datos.imei || 'Sin IMEI';
+
         const card = document.createElement('div');
         card.className = 'user-card';
 
         const link = document.createElement('a');
         link.href = `usuario.html?telefono=${telefono}`;
-        link.textContent = telefono;
         link.className = 'user-link';
+        link.textContent = `${telefono} - ${nombre} - ${imei}`;
 
         card.appendChild(link);
         lista.appendChild(card);
-      });
+      }
     }
 
     cargarUsuarios();
