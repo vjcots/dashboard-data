@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Lista de usuarios</title>
+  <script src="utils.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    h1 { margin-bottom: 1rem; }
+    li { margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Usuarios en asistencia</h1>
+  <ul id="lista"></ul>
+
+  <script>
+    async function cargarUsuarios() {
+      const keys = await redisKeys('user:*:meta');
+      const lista = document.getElementById('lista');
+      lista.innerHTML = '';
+
+      keys.forEach(key => {
+        const telefono = key.split(':')[1];
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = `usuario.html?telefono=${telefono}`;
+        a.textContent = telefono;
+        li.appendChild(a);
+        lista.appendChild(li);
+      });
+    }
+
+    cargarUsuarios();
+    setInterval(cargarUsuarios, 5000);
+  </script>
+</body>
+</html>
