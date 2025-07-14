@@ -66,8 +66,8 @@
       lista.innerHTML = '';
 
       for (const key of keys) {
-        const telefono = key.split(':')[1];
         const datos = await redisHGetAll(key);
+        const telefono = (datos.telefono || key.split(':')[1]).replace('+34', '');
         const nombre = datos.profileName || datos.nombre || 'Sin nombre';
         const imei = datos.imei || 'Sin IMEI';
 
