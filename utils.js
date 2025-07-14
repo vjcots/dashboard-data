@@ -1,5 +1,5 @@
 const UPSTASH_URL   = 'https://boss-trout-41956.upstash.io';
-const UPSTASH_TOKEN = 'Bearer TU_TOKEN_AQUI';   // ← pon tu token real
+const UPSTASH_TOKEN = 'AqPkAAIgcDGO-OZuVmKboPXAp3KEJNqepgwD9ThmrK88RpsgT_hwzQ';   // ← pon tu token real
 
 // ------------------ HGETALL que siempre devuelve objeto ------------------
 async function redisHGetAll(key) {
