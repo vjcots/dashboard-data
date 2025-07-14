@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Detalles del usuario</title>
+  <script src="utils.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    h1 { margin-bottom: 1rem; }
+    p { margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Datos del usuario</h1>
+  <div id="datos"></div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const telefono = params.get('telefono');
+    const metaKey = `user:${telefono}:meta`;
+
+    async function cargarDatos() {
+      const datos = await redisHGetAll(metaKey);
+      const div = document.getElementById('datos');
+      div.innerHTML = '';
+
+      Object.entries(datos).forEach(([k, v]) => {
+        const p = document.createElement('p');
+        p.innerHTML = `<strong>${k}:</strong> ${v}`;
+        div.appendChild(p);
+      });
+    }
+
+    cargarDatos();
+    setInterval(cargarDatos, 5000);
+  </script>
+</body>
+</html>
